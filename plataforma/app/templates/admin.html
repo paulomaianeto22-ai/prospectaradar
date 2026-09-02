@@ -1,0 +1,16 @@
+{% extends "base.html" %}{% block conteudo %}
+<h1>Admin — fila de pedidos</h1><p class="sub">Rode o script, cole o CSV e entregue.</p>
+{% if not pendentes %}<div class="card">Nenhum pedido pendente 🎉</div>{% endif %}
+{% for p in pendentes %}
+<div class="card" style="margin-bottom:16px">
+<b>{{ users[p.user_id].email }}</b> pediu <b>{{ p.quantidade }}</b> × "{{ p.tipo_comercio }}" em {{ p.cidade }}/{{ p.uf }}
+<div style="background:var(--luz);padding:10px;border-radius:8px;margin:10px 0;font-size:.85rem">
+Rode: <code>python scripts/prospectar_radar.py "{{ p.tipo_comercio }}" "{{ p.cidade }}" "{{ p.uf }}" {{ p.quantidade }}</code> e cole o CSV abaixo.</div>
+<form method="post" action="/admin/entregar">
+<input type="hidden" name="request_id" value="{{ p.id }}">
+<textarea name="csv_texto" rows="6" placeholder="cole aqui o conteúdo do CSV (com cabeçalho)"></textarea>
+<button class="btn" type="submit">Entregar leads</button></form>
+<form method="post" action="/admin/grant" style="margin-top:8px">
+<input type="hidden" name="user_id" value="{{ p.user_id }}">
+<button class="btn sm" style="background:var(--roxo)" type="submit">Liberar +10 pra este cliente</button></form>
+</div>{% endfor %}{% endblock %}
