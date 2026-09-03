@@ -1,0 +1,18 @@
+{% extends "base.html" %}{% block conteudo %}
+{% set labels={'nao_contatado':'Não contatado','contatado':'Contatado','respondeu':'Respondeu','em_negociacao':'Em negociação','fechou':'Fechou','sem_interesse':'Sem interesse','contato_errado':'Contato errado'} %}
+<h1>{{ req.tipo_comercio }} — {{ req.cidade }}/{{ req.uf }}</h1>
+<p class="sub">{{ leads|length }} leads. Marque o desfecho de cada um.</p>
+<div class="card">
+<table><tr><th>Empresa</th><th>Cidade</th><th>Contato</th><th>Instagram</th><th>Situação</th><th>Porte</th><th style="min-width:230px">Desfecho</th></tr>
+{% for l in leads %}<tr>
+<td><b>{{ l.empresa }}</b></td><td>{{ l.cidade }}</td>
+<td>{{ l.telefone }}{% if l.canal %}<br><span class="tag">{{ l.canal }}</span>{% endif %}{% if l.email %}<br>{{ l.email }}{% endif %}</td>
+<td>{% if l.instagram %}<a class="link" href="{{ l.instagram }}" target="_blank">abrir</a>{% else %}—{% endif %}</td>
+<td>{{ l.situacao }}</td><td>{{ l.porte }}</td>
+<td><form method="post" action="/feedback" style="display:flex;gap:6px;flex-wrap:wrap">
+<input type="hidden" name="lead_id" value="{{ l.id }}">
+<select name="status">{% for op in status_opcoes %}<option value="{{ op }}" {% if fb.get(l.id) and fb[l.id].status==op %}selected{% endif %}>{{ labels[op] }}</option>{% endfor %}</select>
+<input name="observacao" placeholder="obs (opcional)" value="{{ fb[l.id].observacao if fb.get(l.id) else '' }}" style="width:120px">
+<button class="btn sm" type="submit">Salvar</button></form></td>
+</tr>{% endfor %}</table>
+</div>{% endblock %}

@@ -1,0 +1,12 @@
+{% extends "base.html" %}{% block conteudo %}
+<div class="card" style="max-width:560px;margin:20px auto">
+<h1>Gerar meus leads</h1><p class="sub">Escolha o tipo de negócio, a cidade e a quantidade (até {{ restantes }}).</p>
+{% if erro %}<div class="erro">{{ erro }}</div>{% endif %}
+{% if restantes == 0 %}<div class="erro">Seus leads grátis acabaram. <a class="link" href="/extra">Peça +10</a>.</div>{% endif %}
+<form method="post">
+<label>Tipo de comércio</label><input name="tipo_comercio" placeholder="ex: clínica de estética" required>
+<label>Cidade</label><input name="cidade" placeholder="ex: Curitiba" required>
+<label>UF</label><input name="uf" placeholder="ex: PR" maxlength="2" required>
+<label>Quantidade (até {{ restantes }})</label><input name="quantidade" type="number" min="1" max="{{ restantes }}" value="{{ restantes if restantes<25 else 25 }}" required>
+<button class="btn" {% if restantes==0 %}disabled{% endif %}>Gerar meus leads</button></form>
+</div>{% endblock %}
