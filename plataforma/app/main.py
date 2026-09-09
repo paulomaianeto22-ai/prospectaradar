@@ -3,9 +3,9 @@
 Fase 0 / Mágico de Oz: cliente pede leads; admin (Paulo) roda os scripts e
 cola o CSV; cliente vê no painel e marca o feedback de cada lead.
 """
-import os, csv, io
+import os, csv, io, re, json
 from datetime import datetime
-from fastapi import FastAPI, Request, Depends, Form, HTTPException
+from fastapi import FastAPI, Request, Depends, Form, HTTPException, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
@@ -45,6 +45,45 @@ def atual(request: Request, s: Session) -> User | None:
 
 def restantes(u: User) -> int:
     return max(0, u.leads_gratis_liberados - u.leads_gratis_usados)
+
+
+def parse_leads(texto: str) -> list[dict]:
+    """Aceita os dois formatos que o admin pode colar/anexar:
+    1) a página de 'Compartilhar' do Lead Viewer (tem `var DADOS=[...]`);
+    2) um CSV cru (com cabeçalho).
+    Retorna sempre uma lista de dicts (chave = nome da coluna)."""
+    if not texto:
+        return []
+    # 1) página compartilhável do Lead Viewer
+    m = re.search(r"var DADOS=(\[[\s\S]*?\]);var TITLE=", texto)
+    if m:
+        try:
+            dados = json.loads(m.group(1))
+            if isinstance(dados, list):
+                return [d for d in dados if isinstance(d, dict)]
+        except Exception:
+            pass
+    # 2) CSV cru
+    try:
+        return list(csv.DictReader(io.StringIO(texto.strip())))
+    except Exception:
+        return []
+
+
+def gravar_leads(req: LeadRequest, linhas: list[dict], s: Session) -> int:
+    """Cria os Lead a partir das linhas parseadas. Mapeamento flexível de colunas."""
+    n = 0
+    for r in linhas:
+        g = lambda *ks: next((str(r[k]).strip() for k in ks if r.get(k) not in (None, "")), "")
+        s.add(Lead(request_id=req.id, user_id=req.user_id,
+                   empresa=g("empresa", "company", "nome"), cidade=g("cidade", "city"),
+                   telefone=g("telefone", "phone", "fone"), email=g("email", "e-mail"),
+                   canal=g("canal"), website=g("website", "site"),
+                   situacao=g("situacao", "problema", "status"), porte=g("porte"),
+                   instagram=g("instagram", "ig"),
+                   nota_google=g("nota_google", "nota", "rating"),
+                   avaliacoes=g("avaliacoes", "reviews"))); n += 1
+    return n
 
 
 # ---------------- AUTH ----------------
@@ -176,28 +215,51 @@ def admin(request: Request, s: Session = Depends(get_session)):
     return templates.TemplateResponse(request, "admin.html", {"u": u, "pendentes": pendentes, "users": users})
 
 
+def _entregar(req: LeadRequest, texto: str, s: Session) -> int:
+    """Grava os leads no pedido, marca como entregue e atualiza a cota. Retorna quantos."""
+    linhas = parse_leads(texto)
+    n = gravar_leads(req, linhas, s)
+    if n == 0:
+        return 0
+    req.status = "entregue"; req.entregue_em = datetime.utcnow()
+    dono = s.get(User, req.user_id)
+    dono.leads_gratis_usados += n
+    s.add(req); s.add(dono); s.commit()
+    return n
+
+
 @app.post("/admin/entregar")
-def admin_entregar(request: Request, request_id: str = Form(...), csv_texto: str = Form(...),
+def admin_entregar(request: Request, request_id: str = Form(...), csv_texto: str = Form(""),
                    s: Session = Depends(get_session)):
     u = atual(request, s)
     if not u or not u.is_admin: raise HTTPException(403)
     req = s.get(LeadRequest, request_id)
     if not req: raise HTTPException(404)
-    reader = csv.DictReader(io.StringIO(csv_texto.strip()))
-    n = 0
-    for r in reader:
-        g = lambda *ks: next((r[k] for k in ks if k in r and r[k]), "")
-        s.add(Lead(request_id=req.id, user_id=req.user_id,
-                   empresa=g("empresa","company"), cidade=g("cidade","city"),
-                   telefone=g("telefone","phone"), email=g("email"),
-                   canal=g("canal"), website=g("website"),
-                   situacao=g("situacao","problema","status"), porte=g("porte"),
-                   instagram=g("instagram"), nota_google=g("nota_google"),
-                   avaliacoes=g("avaliacoes"))); n += 1
-    req.status = "entregue"; req.entregue_em = datetime.utcnow()
-    dono = s.get(User, req.user_id)
-    dono.leads_gratis_usados += n
-    s.add(req); s.add(dono); s.commit()
+    if _entregar(req, csv_texto, s) == 0:
+        pendentes = s.exec(select(LeadRequest).where(LeadRequest.status == "pendente")
+                           .order_by(LeadRequest.criado_em)).all()
+        users = {x.id: x for x in s.exec(select(User)).all()}
+        return templates.TemplateResponse(request, "admin.html", {"u": u, "pendentes": pendentes,
+             "users": users, "erro": "Nenhum lead reconhecido — cole o CSV com cabeçalho ou anexe o arquivo."})
+    return RedirectResponse("/admin", 302)
+
+
+@app.post("/admin/entregar_arquivo")
+def admin_entregar_arquivo(request: Request, request_id: str = Form(...),
+                           arquivo: UploadFile = File(...),
+                           s: Session = Depends(get_session)):
+    u = atual(request, s)
+    if not u or not u.is_admin: raise HTTPException(403)
+    req = s.get(LeadRequest, request_id)
+    if not req: raise HTTPException(404)
+    raw = arquivo.file.read()
+    texto = raw.decode("utf-8", errors="replace") if isinstance(raw, bytes) else str(raw)
+    if _entregar(req, texto, s) == 0:
+        pendentes = s.exec(select(LeadRequest).where(LeadRequest.status == "pendente")
+                           .order_by(LeadRequest.criado_em)).all()
+        users = {x.id: x for x in s.exec(select(User)).all()}
+        return templates.TemplateResponse(request, "admin.html", {"u": u, "pendentes": pendentes,
+             "users": users, "erro": "Arquivo sem leads reconhecidos — anexe o .html de Compartilhar ou o .csv."})
     return RedirectResponse("/admin", 302)
 
 
