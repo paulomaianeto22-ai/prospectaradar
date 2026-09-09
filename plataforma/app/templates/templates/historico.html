@@ -1,0 +1,11 @@
+{% extends "base.html" %}{% block conteudo %}
+<h1>Histórico de pedidos</h1><p class="sub">Seus lotes de leads.</p>
+<div class="card">
+{% if not pedidos %}<p>Você ainda não pediu leads. <a class="link" href="/pedir">Pedir agora</a>.</p>{% endif %}
+<table><tr><th>Data</th><th>Tipo</th><th>Cidade</th><th>Qtd</th><th>Status</th><th></th></tr>
+{% for p in pedidos %}<tr>
+<td>{{ p.criado_em.strftime('%d/%m/%Y') }}</td><td>{{ p.tipo_comercio }}</td>
+<td>{{ p.cidade }}/{{ p.uf }}</td><td>{{ p.quantidade }}</td>
+<td><span class="tag">{{ p.status }}</span></td>
+<td>{% if p.status=='entregue' %}<a class="link" href="/pedido/{{ p.id }}">Ver leads →</a>{% else %}<span style="color:#999">gerando...</span>{% endif %}</td>
+</tr>{% endfor %}</table></div>{% endblock %}

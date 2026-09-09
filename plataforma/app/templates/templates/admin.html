@@ -1,0 +1,29 @@
+{% extends "base.html" %}{% block conteudo %}
+<h1>Admin — fila de pedidos</h1><p class="sub">Rode o script e anexe o arquivo de leads.</p>
+{% if erro %}<div class="card" style="border:1px solid #e11d48;color:#e11d48">{{ erro }}</div>{% endif %}
+{% if not pendentes %}<div class="card">Nenhum pedido pendente 🎉</div>{% endif %}
+{% for p in pendentes %}
+<div class="card" style="margin-bottom:16px">
+<b>{{ users[p.user_id].email }}</b> pediu <b>{{ p.quantidade }}</b> × "{{ p.tipo_comercio }}" em {{ p.cidade }}/{{ p.uf }}
+<div style="background:var(--luz);padding:10px;border-radius:8px;margin:10px 0;font-size:.85rem">
+Rode: <code>python scripts/prospectar_radar.py "{{ p.tipo_comercio }}" "{{ p.cidade }}" "{{ p.uf }}" {{ p.quantidade }}</code><br>
+Depois <b>anexe</b> o arquivo de <b>Compartilhar</b> do Lead Viewer (<code>.html</code>) ou o próprio <code>.csv</code>.</div>
+
+<form method="post" action="/admin/entregar_arquivo" enctype="multipart/form-data">
+<input type="hidden" name="request_id" value="{{ p.id }}">
+<input type="file" name="arquivo" accept=".html,.htm,.csv" required
+       style="display:block;margin:8px 0;padding:10px;border:2px dashed #cdbde8;border-radius:10px;width:100%;background:#fff">
+<button class="btn" type="submit">📎 Entregar (anexar arquivo)</button></form>
+
+<details style="margin-top:12px">
+<summary style="cursor:pointer;color:var(--roxo);font-size:.85rem">ou colar o CSV manualmente</summary>
+<form method="post" action="/admin/entregar" style="margin-top:8px">
+<input type="hidden" name="request_id" value="{{ p.id }}">
+<textarea name="csv_texto" rows="6" placeholder="cole aqui o conteúdo do CSV (com cabeçalho)"></textarea>
+<button class="btn" type="submit">Entregar leads</button></form>
+</details>
+
+<form method="post" action="/admin/grant" style="margin-top:8px">
+<input type="hidden" name="user_id" value="{{ p.user_id }}">
+<button class="btn sm" style="background:var(--roxo)" type="submit">Liberar +10 pra este cliente</button></form>
+</div>{% endfor %}{% endblock %}
